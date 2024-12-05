@@ -52,7 +52,8 @@ jobs:
             --platform managed \
             --region ${{ env.GCR_REGION }} \
             --port 8000 \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --memory 1Gi
       - name: 'Show output'
         run: |2-
           echo ${{ steps.deploy.outputs.url }}
