@@ -1,5 +1,5 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12-slim
+# Stage 1: Build Stage
+FROM python:3.12-slim as builder
 
 # Set the working directory in the container
 WORKDIR /app
@@ -9,6 +9,13 @@ COPY requirements.txt .
 
 # Install the required Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime Stage
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY --from=builder /app /app
 
 # Copy the current directory contents into the container
 COPY . .
