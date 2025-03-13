@@ -61,7 +61,7 @@ jobs:
             --image ${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPO_NAME }}/${{ env.GAR_IMAGE_NAME }}:${{ github.sha }} \
             --platform managed \
             --region ${{ env.GCR_REGION }} \
-            --port 8080 \
+            --port 8000 \
             --allow-unauthenticated \
             --memory 2Gi \
             --timeout=1800s \
