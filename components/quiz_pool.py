@@ -1,29 +1,20 @@
-import sqlite3
+from database.db import get_db
 import random
-from database.db import get_connection
+import json
 
 def get_quiz_questions(user_id):
+    db = get_db()
+
     """Generate a detailed pool of quiz questions for the user based on user data."""
-    conn = get_connection()
-    cursor = conn.cursor()
+    user_doc = db.collection('users').document(user_id).get()
+    user_data = user_doc.to_dict() if user_doc.exists else None
 
-    # Fetch user details
-    cursor.execute("SELECT full_name, birth_date, hometown FROM users WHERE user_id = ?", (user_id,))
-    user_data = cursor.fetchone()
+    pref_doc = db.collection('user_preferences').document(user_id).get()
+    preferences = pref_doc.to_dict() if pref_doc.exists else None
 
-    # Fetch user preferences
-    cursor.execute("SELECT hobby, favorite_color, favorite_food, favorite_song, favorite_movie FROM user_preferences WHERE user_id = ?", (user_id,))
-    preferences = cursor.fetchone()
+    life_events = [doc.to_dict() for doc in db.collection('life_events').where('user_id', '==', user_id).stream()]
 
-    # Fetch life events
-    cursor.execute("SELECT event_title, event_date, description FROM life_events WHERE user_id = ?", (user_id,))
-    life_events = cursor.fetchall()
-
-    # Fetch image contexts
-    cursor.execute("SELECT context_who, context_where, context_when, event_title FROM images_with_context WHERE user_id = ?", (user_id,))
-    images_context = cursor.fetchall()
-
-    conn.close()
+    images_context = [doc.to_dict() for doc in db.collection('images_with_context').where('user_id', '==', user_id).stream()]
 
     # Initialize quiz pool structure
     quiz_pool = {
@@ -34,9 +25,11 @@ def get_quiz_questions(user_id):
 
     # About Me Questions
     if user_data:
-        full_name, birth_date, hometown = user_data
+        full_name = user_data.get('full_name')
+        birth_date = user_data.get('birth_date')
+        hometown = user_data.get('hometown')
         quiz_pool["about_me"].append({
-            "question": f"What is your full name?",
+            "question": "What is your full name?",
             "answer": full_name,
             "sub_questions": [
                 "Who gave you your name?",
@@ -45,14 +38,14 @@ def get_quiz_questions(user_id):
                 "Do you like your full name? Why or why not?",
                 "How did your family choose your name?",
                 "Are there any nicknames associated with your full name?",
-                "Does your full name have any historical or cultural significance?",
+                "Does your full_name have any historical or cultural significance?",
                 "How do you feel when you hear your full name spoken aloud?",
                 "Have you ever changed your name, or would you consider changing it?",
                 "Do you have any fun facts about your name?"
             ]
         })
         quiz_pool["about_me"].append({
-            "question": f"When is your birthday (MM-DD-YYYY)?",
+            "question": "When is your birthday (MM-DD-YYYY)?",
             "answer": birth_date,
             "sub_questions": [
                 "Do you remember a memorable birthday party?",
@@ -68,7 +61,7 @@ def get_quiz_questions(user_id):
             ]
         })
         quiz_pool["about_me"].append({
-            "question": f"Where is your hometown?",
+            "question": "Where is your hometown?",
             "answer": hometown,
             "sub_questions": [
                 "What is the best memory you have from your hometown?",
@@ -85,9 +78,13 @@ def get_quiz_questions(user_id):
         })
 
     if preferences:
-        hobby, favorite_color, favorite_food, favorite_song, favorite_movie = preferences
+        hobby = preferences.get('hobby', [])
+        favorite_color = preferences.get('favorite_color')
+        favorite_food = preferences.get('favorite_food')
+        favorite_song = preferences.get('favorite_song')
+        favorite_movie = preferences.get('favorite_movie')
         quiz_pool["about_me"].append({
-            "question": f"What is your favorite color?",
+            "question": "What is your favorite color?",
             "answer": favorite_color,
             "sub_questions": [
                 "How many clothes do you have in your favorite color?",
@@ -103,7 +100,7 @@ def get_quiz_questions(user_id):
             ]
         })
         quiz_pool["about_me"].append({
-            "question": f"What food do you love the most?",
+            "question": "What food do you love the most?",
             "answer": favorite_food,
             "sub_questions": [
                 "When did you first try this food?",
@@ -121,7 +118,9 @@ def get_quiz_questions(user_id):
 
     # Life Events Questions
     for event in life_events:
-        event_title, event_date, description = event
+        event_title = event.get('event_title')
+        event_date = event.get('event_date')
+        description = event.get('description')
         quiz_pool["life_events"].append({
             "question": f"What happened during {event_title}?",
             "answer": description,
@@ -129,22 +128,25 @@ def get_quiz_questions(user_id):
                 f"When did {event_title} occur (MM-DD-YYYY)?",
                 "How did this event affect your life?",
                 "Who was the most important person during {event_title}?",
-                "Can you describe the emotions you felt during {event_title}?",
-                "Was there a specific moment that stands out from {event_title}?",
-                "What did you learn from {event_title}?",
-                "How has {event_title} impacted you today?",
-                "Do you remember any funny or unexpected moments from {event_title}?",
-                "Who helped you through {event_title}?",
-                "Is there a specific song or memory tied to {event_title}?"
+                f"Can you describe the emotions you felt during {event_title}?",
+                f"Was there a specific moment that stands out from {event_title}?",
+                f"What did you learn from {event_title}?",
+                f"How has {event_title} impacted you today?",
+                f"Do you remember any funny or unexpected moments from {event_title}?",
+                f"Who helped you through {event_title}?",
+                f"Is there a specific song or memory tied to {event_title}?"
             ]
         })
 
     # Image Context Questions
     for image in images_context:
-        context_who, context_where, context_when, event_title = image
+        context_who = image.get('context_who')
+        context_where = image.get('context_where')
+        context_when = image.get('context_when')
+        event_title = image.get('event_title')
         quiz_pool["image_context"].append({
             "question": f"Who are the people in the image from {event_title}?",
-            "answer": context_who,
+            "answer": json.dumps(context_who),  # Store as JSON string
             "sub_questions": [
                 "What event is captured in this image?",
                 "How do you feel about the people in this photo?",
@@ -152,7 +154,7 @@ def get_quiz_questions(user_id):
                 "How did you interact with the people in this photo?",
                 "Who is the person you remember the most from this photo?",
                 "Do you still stay in touch with anyone from this event?",
-                "What story does this photo tell about {event_title}?",
+                f"What story does this photo tell about {event_title}?",
                 "Who took this picture and why was it significant?",
                 "Is there a memory associated with this specific photo?",
                 "What moment in the event is captured in this photo?"
@@ -161,9 +163,8 @@ def get_quiz_questions(user_id):
 
     # Select 2 random questions for each category with their sub-questions
     quiz_result = {
-        "about_me": random.sample(quiz_pool["about_me"], 2),
-        "life_events": random.sample(quiz_pool["life_events"], 2),
-        "image_context": random.sample(quiz_pool["image_context"], 2)
+        "about_me": random.sample(quiz_pool["about_me"], min(2, len(quiz_pool["about_me"]))),
+        "life_events": random.sample(quiz_pool["life_events"], min(2, len(quiz_pool["life_events"]))),
+        "image_context": random.sample(quiz_pool["image_context"], min(2, len(quiz_pool["image_context"])))
     }
-
     return quiz_result

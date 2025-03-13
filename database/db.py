@@ -1,34 +1,31 @@
-import sqlite3
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-DB_FILE = "carebot.db"
+cred = credentials.Certificate("serviceAccountKey.json") 
+firebase_admin.initialize_app(cred)
 
-def get_connection():
-    """Establish and return a database connection."""
-    return sqlite3.connect(DB_FILE)
+db = firestore.client()
+
+def get_db():
+    """Return the Firestore client."""
+    return db
 
 def init_db():
-    """Initialize the database with the required schema and sample data."""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # Create tables
-    with open("database/schema.sql", "r") as schema_file:
-        cursor.executescript(schema_file.read())
-
-    # Check if users table is empty
-    cursor.execute("SELECT COUNT(*) FROM users")
-    user_count = cursor.fetchone()[0]
-
-    if user_count == 0:
+    """Initialize Firestore with sample data."""
+    
+    users_ref = db.collection('users')
+    if not users_ref.limit(1).get():
         # Insert sample users
-        cursor.execute("""
-            INSERT INTO users (user_id, full_name, birth_date, hometown)
-            VALUES ('1', 'Michael Johnson', '1965-04-10', 'Springfield, Illinois');
-        """)
-        cursor.execute("""
-            INSERT INTO users (user_id, full_name, birth_date, hometown)
-            VALUES ('2', 'Sarah Williams', '1970-07-15', 'Austin, Texas');
-        """)
-        conn.commit()
-
-    conn.close()
+        users_ref.document('1').set({
+            'user_id': '1',
+            'full_name': 'Michael Johnson',
+            'birth_date': '1965-04-10',
+            'hometown': 'Springfield, Illinois'
+        })
+        users_ref.document('2').set({
+            'user_id': '2',
+            'full_name': 'Sarah Williams',
+            'birth_date': '1970-07-15',
+            'hometown': 'Austin, Texas'
+        })
+    print("Firestore initialized with sample data if empty.")

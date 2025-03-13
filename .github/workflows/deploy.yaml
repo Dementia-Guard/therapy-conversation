@@ -53,7 +53,8 @@ jobs:
             --region ${{ env.GCR_REGION }} \
             --port 8000 \
             --allow-unauthenticated \
-            --memory 2Gi
+            --memory 2Gi \
+            --timeout=1800s \
       - name: 'Show output'
         run: |2-
           echo ${{ steps.deploy.outputs.url }}

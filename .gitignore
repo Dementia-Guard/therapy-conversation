@@ -3,3 +3,12 @@ __pycache__/
 
 # Environment variables
 .env
+serviceAccountKey.json
+
+# Ignore IDE-specific files
+.idea/
+.venv/
+
+# Ignore logs and temporary files
+*.log
+*.tmp

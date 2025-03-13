@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from database.db import get_connection, init_db
+from database.db import get_db, init_db
 from components.quiz_pool import get_quiz_questions
 import json
 import random
@@ -30,7 +30,7 @@ def init_session(user_id):
     session_data = {
         'dialog_count': 0,  # Number of dialogues in the conversation
         'answers': [],  # Stores answers to the questions
-        'start_time': datetime.now(),  # Timestamp for session start
+        'start_time': datetime.now().isoformat(),  # Timestamp for session start
         'is_quiz_started': False  # Whether quiz phase has started or not
     }
     active_sessions[user_id] = session_data
@@ -82,24 +82,21 @@ def evaluate_sub_question(user_answer, sub_question, threshold=0.5):
 
 # Function to save answer to the database
 def save_answer_to_db(user_id, question, answer, accuracy, question_type):
-    connection = get_connection()
-    cursor = connection.cursor()
-    
-    # SQL query to insert the answer into the user_answers table
-    cursor.execute(""" 
-        INSERT INTO user_answers (user_id, question, answer, accuracy, question_type)
-        VALUES (?, ?, ?, ?, ?)
-    """, (user_id, question, answer, accuracy, question_type))
-    
-    connection.commit()
-    connection.close()
+    db = get_db()
+    db.collection('user_answers').add({
+        'user_id': user_id,
+        'question': question,
+        'answer': answer,
+        'accuracy': accuracy,
+        'question_type': question_type,
+        'timestamp': datetime.now().isoformat()
+    })
 
 # Route to handle quiz submissions and evaluate answers
 @app.route('/post_quiz/<user_id>', methods=['POST'])
 def post_quiz(user_id):
     # Get the user answers from the request
     data = request.get_json()
-    
     result = []
     
     # Process main question answers
@@ -141,14 +138,13 @@ def post_quiz(user_id):
 
 # Function to store conversations
 def store_conversation(user_id, user_message, chatbot_response):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO user_conversations (user_id, user_message, chatbot_response, timestamp)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, user_message, chatbot_response, datetime.now()))
-    conn.commit()
-    conn.close()
+    db = get_db()
+    db.collection('user_conversations').add({
+        'user_id': user_id,
+        'user_message': user_message,
+        'chatbot_response': chatbot_response,
+        'timestamp': datetime.now().isoformat()
+    })
 
 # Function to get chatbot's response using DialoGPT
 def get_chatbot_response(user_message):
@@ -230,88 +226,56 @@ def save_user(user_id):
         life_events = data.get("life_events", [])
         images_with_context = data.get("images_with_context", [])
 
-        conn = get_connection()
-        cursor = conn.cursor()
+        db = get_db()
 
-        # Insert into users table
-        cursor.execute(
-            """
-            INSERT OR IGNORE INTO users (user_id, full_name, birth_date, hometown)
-            VALUES (?, ?, ?, ?);
-            """,
-            (
-                user_id,
-                about_me.get("full_name"),
-                about_me.get("birth_date"),
-                about_me.get("hometown"),
-            ),
-        )
+        # Save to users collection
+        db.collection('users').document(user_id).set({
+            'user_id': user_id,
+            'full_name': about_me.get("full_name"),
+            'birth_date': about_me.get("birth_date"),
+            'hometown': about_me.get("hometown")
+        })
 
         # Insert into user_preferences table
         hobbies = about_me.get("hobbies", [])
         favorite_things = about_me.get("favorite_things", {})
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO user_preferences (user_id, hobby, favorite_color, favorite_food, favorite_song, favorite_movie)
-            VALUES (?, ?, ?, ?, ?, ?);
-            """,
-            (
-                user_id,
-                ",".join(hobbies),  # Store hobbies as a comma-separated string
-                favorite_things.get("color"),
-                favorite_things.get("food"),
-                favorite_things.get("song"),
-                favorite_things.get("movie"),
-            ),
-        )
+        db.collection('user_preferences').document(user_id).set({
+            'user_id': user_id,
+            'hobby': hobbies,
+            'favorite_color': favorite_things.get("color"),
+            'favorite_food': favorite_things.get("food"),
+            'favorite_song': favorite_things.get("song"),
+            'favorite_movie': favorite_things.get("movie")
+        })
 
         # Insert into life_events and related people
         for event in life_events:
-            cursor.execute(
-                """
-                INSERT INTO life_events (user_id, event_title, event_date, description, emotions)
-                VALUES (?, ?, ?, ?, ?);
-                """,
-                (
-                    user_id,
-                    event.get("event_title"),
-                    event.get("date"),
-                    event.get("description"),
-                    json.dumps(event.get("emotions", [])),  # Store emotions as JSON
-                ),
-            )
-            event_id = cursor.lastrowid
+            event_doc = db.collection('life_events').add({
+                'user_id': user_id,
+                'event_title': event.get("event_title"),
+                'event_date': event.get("date"),
+                'description': event.get("description"),
+                'emotions': event.get("emotions", [])
+            })[1]  # Get the document reference
+            event_id = event_doc.id
             for person in event.get("related_people", []):
-                cursor.execute(
-                    """
-                    INSERT INTO life_event_people (event_id, person_name)
-                    VALUES (?, ?);
-                    """,
-                    (event_id, person),
-                )
+                db.collection('life_event_people').add({
+                    'event_id': event_id,
+                    'person_name': person
+                })
 
         # Insert into images_with_context
         for image in images_with_context:
             context = image.get("context", {})
-            cursor.execute(
-                """
-                INSERT INTO images_with_context (user_id, image_base64, context_who, context_where, context_when, event_title, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    user_id,
-                    image.get("image_base64"),
-                    json.dumps(context.get("who", [])),  # Store "who" as JSON
-                    context.get("where"),
-                    context.get("when"),
-                    context.get("event_title"),
-                    context.get("description"),
-                ),
-            )
-
-        # Commit the changes and close the connection
-        conn.commit()
-        conn.close()
+            db.collection('images_with_context').add({
+                'user_id': user_id,
+                'image_base64': image.get("image_base64"),
+                'context_who': context.get("who", []),
+                'context_where': context.get("where"),
+                'context_when': context.get("when"),
+                'event_title': context.get("event_title"),
+                'description': context.get("description")
+            })
 
         return jsonify({"message": "User data saved successfully"}), 201
 

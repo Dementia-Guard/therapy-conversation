@@ -1,57 +1,59 @@
-from database.db import get_connection
+from database.db import get_db
+import json
 
 def save_user_data(user_id, user_data):
-    """Save user data to the database."""
-    conn = get_connection()
-    cursor = conn.cursor()
+    db = get_db()
 
+    """Save user data to the database."""
     try:
         # Save basic user information
         about_me = user_data['about_me']
-        cursor.execute("""
-        INSERT OR REPLACE INTO users (user_id, full_name, birth_date, hometown)
-        VALUES (?, ?, ?, ?)
-        """, (user_id, about_me['full_name'], about_me['birth_date'], about_me['hometown']))
+        db.collection('users').document(user_id).set({
+            'user_id': user_id,
+            'full_name': about_me['full_name'],
+            'birth_date': about_me['birth_date'],
+            'hometown': about_me['hometown']
+        })
 
         # Save user preferences
-        for hobby in about_me['hobbies']:
-            cursor.execute("""
-            INSERT INTO user_preferences (user_id, hobby, favorite_color, favorite_food, favorite_song, favorite_movie)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """, (user_id, hobby, about_me['favorite_things']['color'], about_me['favorite_things']['food'],
-                  about_me['favorite_things']['song'], about_me['favorite_things']['movie']))
+        db.collection('user_preferences').document(user_id).set({
+            'user_id': user_id,
+            'hobby': about_me['hobbies'],
+            'favorite_color': about_me['favorite_things']['color'],
+            'favorite_food': about_me['favorite_things']['food'],
+            'favorite_song': about_me['favorite_things']['song'],
+            'favorite_movie': about_me['favorite_things']['movie']
+        })
 
         # Save life events
         for event in user_data['life_events']:
-            cursor.execute("""
-            INSERT INTO life_events (user_id, event_title, event_date, description, emotions)
-            VALUES (?, ?, ?, ?, ?)
-            """, (user_id, event['event_title'], event['date'], event['description'], json.dumps(event['emotions'])))
-            event_id = cursor.lastrowid  # Get the auto-incremented event ID
-
+            event_doc = db.collection('life_events').add({
+                'user_id': user_id,
+                'event_title': event['event_title'],
+                'event_date': event['date'],
+                'description': event['description'],
+                'emotions': event['emotions']
+            })[1]
+            event_id = event_doc.id
             for person in event['related_people']:
-                name, relationship = person.split(" (")
-                relationship = relationship.rstrip(")")
-                cursor.execute("""
-                INSERT INTO life_event_people (event_id, person_name, relationship)
-                VALUES (?, ?, ?)
-                """, (event_id, name, relationship))
+                db.collection('life_event_people').add({
+                    'event_id': event_id,
+                    'person_name': person
+                })
 
         # Save images with context
         for image in user_data['images_with_context']:
-            cursor.execute("""
-            INSERT INTO images_with_context (user_id, image_base64, who, where, when, event_title, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, image['image_base64'], json.dumps(image['context']['who']),
-                  image['context']['where'], image['context']['when'], image['context']['event_title'],
-                  image['context']['description']))
+            db.collection('images_with_context').add({
+                'user_id': user_id,
+                'image_base64': image['image_base64'],
+                'context_who': image['context']['who'],
+                'context_where': image['context']['where'],
+                'context_when': image['context']['when'],
+                'event_title': image['context']['event_title'],
+                'description': image['context']['description']
+            })
 
-        conn.commit()
         return {"message": "User data saved successfully"}
 
     except Exception as e:
-        conn.rollback()
         return {"error": str(e)}
-
-    finally:
-        conn.close()
