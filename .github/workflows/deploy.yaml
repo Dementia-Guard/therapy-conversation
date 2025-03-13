@@ -1,48 +1,52 @@
-name: 'Build and Deploy to Cloud Run'
+name: "Build and Deploy to Cloud Run"
 
 on:
   push:
     branches:
-      - 'main'
+      - "main"
 
 env:
-  PROJECT_ID: '${{ secrets.PROJECT_ID }}'
-  GCR_REGION: '${{ secrets.GCR_REGION }}'
-  GAR_IMAGE_NAME: '${{ secrets.GAR_IMAGE_NAME }}'
-  GAR_REPO_NAME: '${{ secrets.GAR_REPO_NAME }}'
-  GAR_REGION: '${{ secrets.GAR_REGION }}'
-  GCR_SERVICE: '${{ secrets.GCR_SERVICE }}'
+  PROJECT_ID: "${{ secrets.PROJECT_ID }}"
+  GCR_REGION: "${{ secrets.GCR_REGION }}"
+  GAR_IMAGE_NAME: "${{ secrets.GAR_IMAGE_NAME }}"
+  GAR_REPO_NAME: "${{ secrets.GAR_REPO_NAME }}"
+  GAR_REGION: "${{ secrets.GAR_REGION }}"
+  GCR_SERVICE: "${{ secrets.GCR_SERVICE }}"
 
 jobs:
   deploy:
-    runs-on: 'ubuntu-latest'
+    runs-on: "ubuntu-latest"
 
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: "read"
+      id-token: "write"
 
     steps:
-      - name: 'Checkout'
-        uses: 'actions/checkout@v4'
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
 
-      - name: 'Authenticate to GCP'
-        id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+      - name: "Authenticate to GCP"
+        id: "auth"
+        uses: "google-github-actions/auth@v2"
         with:
-          credentials_json: '${{ secrets.GCP_CREDS }}'
+          credentials_json: "${{ secrets.GCP_CREDS }}"
 
       - name: Set up Cloud SDK
-        uses: 'google-github-actions/setup-gcloud@v2'
+        uses: "google-github-actions/setup-gcloud@v2"
 
-      - name: 'Docker Auth To GAR'
+      - name: "Docker Auth To GAR"
         run: |
           gcloud auth configure-docker "${{env.GAR_REGION}}-docker.pkg.dev"
 
-      - name: 'Build and Push To GAR'
+      - name: "Build and Push To GAR"
         run: |-
           DOCKER_TAG="${{ env.GAR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPO_NAME }}/${{ env.GAR_IMAGE_NAME }}:${{ github.sha }}"
           docker build --tag "${DOCKER_TAG}" .
           docker push "${DOCKER_TAG}"
+
+      - name: "Create Environment Variables File"
+        run: |
+          echo "FIREBASE_SERVICE_ACCOUNT_KEY=${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}" > env.yaml
 
       - name: Deploy to Cloud Run
         run: |
@@ -55,7 +59,8 @@ jobs:
             --allow-unauthenticated \
             --memory 2Gi \
             --timeout=1800s \
-            --set-env-vars "FIREBASE_SERVICE_ACCOUNT_KEY=${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}"
-      - name: 'Show output'
+            --env-vars-file env.yaml
+
+      - name: "Show output"
         run: |2-
-          echo ${{ steps.deploy.outputs.url }}
+          echo "Deployed URL: $(gcloud run services describe ${{ env.GCR_SERVICE }} --region ${{ env.GCR_REGION }} --format 'value(status.url)')"
