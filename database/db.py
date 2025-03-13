@@ -1,8 +1,25 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
+import os
+import json
+from dotenv import load_dotenv
 
-cred = credentials.Certificate("serviceAccountKey.json") 
-firebase_admin.initialize_app(cred)
+load_dotenv()
+
+# Initialize Firebase Admin SDK
+if not firebase_admin._apps:  # Prevent re-initialization
+    # Option 1: Load from FIREBASE_SERVICE_ACCOUNT_KEY (JSON string) - used in Cloud Run/GitHub workflow
+    service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+    if service_account_json:
+        try:
+            cred_dict = json.loads(service_account_json)
+            cred = credentials.Certificate(cred_dict)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid FIREBASE_SERVICE_ACCOUNT_KEY JSON: {e}")
+    # Option 3: Fallback to Application Default Credentials - for Cloud Run with service account or gcloud auth
+    else:
+        cred = credentials.ApplicationDefault()
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 

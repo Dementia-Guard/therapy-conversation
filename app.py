@@ -8,6 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from sentence_transformers import SentenceTransformer, util
 import numpy as np
+import os
 
 # Load SentenceTransformer model for evaluating answers
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -22,28 +23,30 @@ app = Flask(__name__)
 # Initialize the database
 init_db()
 
-# This will hold active sessions with user_id as the key
-active_sessions = {}
+# Function to get or create session data from Firestore
+def get_session(user_id):
+    db = get_db()
+    session_ref = db.collection('sessions').document(user_id)
+    session = session_ref.get()
+    if not session.exists:
+        session_data = {
+            'dialog_count': 0,
+            'answers': [],
+            'start_time': datetime.now().isoformat(),
+            'is_quiz_started': False
+        }
+        session_ref.set(session_data)
+        return session_data
+    return session.to_dict()
 
-# Helper function to initialize session data
-def init_session(user_id):
-    session_data = {
-        'dialog_count': 0,  # Number of dialogues in the conversation
-        'answers': [],  # Stores answers to the questions
-        'start_time': datetime.now().isoformat(),  # Timestamp for session start
-        'is_quiz_started': False  # Whether quiz phase has started or not
-    }
-    active_sessions[user_id] = session_data
+def update_session(user_id, session_data):
+    db = get_db()
+    db.collection('sessions').document(user_id).set(session_data)
 
 # This function tracks and handles the conversation flow
 def handle_conversation(user_id, user_message):
     # Get active session data for the user
-    session_data = active_sessions.get(user_id)
-
-    # If session is not initialized, start it
-    if not session_data:
-        init_session(user_id)
-        session_data = active_sessions[user_id]
+    session_data = get_session(user_id)
 
     # Update dialogue count and check if we should start the quiz
     session_data['dialog_count'] += 1
@@ -51,6 +54,7 @@ def handle_conversation(user_id, user_message):
     # If dialogue count reaches 12-20 for now put it to 4 the testing, start asking quiz questions
     if session_data['dialog_count'] >= 4 and not session_data['is_quiz_started']:
         session_data['is_quiz_started'] = True
+        update_session(user_id, session_data)
         return {
             "message": "Thanks for the little chat! Let's move on to the quiz session.",
             "status": "A"
@@ -63,6 +67,7 @@ def handle_conversation(user_id, user_message):
 
         # Store the conversation in the database (both user and chatbot messages)
         store_conversation(user_id, user_message, chatbot_response)
+        update_session(user_id, session_data)
 
         return chatbot_response    
 
@@ -172,8 +177,7 @@ def get_chatbot_response(user_message):
 # Route to start the chat session
 @app.route("/start_session/<string:user_id>", methods=["GET"])
 def start_session(user_id):
-    if user_id not in active_sessions:
-        init_session(user_id)  # Initialize a new session if not already started
+    get_session(user_id)
     return jsonify({"message": "Hello, how are you today? Let's start chatting!"}), 200
 
 # Route to handle the user's messages during the chat session
@@ -285,4 +289,5 @@ def save_user(user_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.getenv("PORT", 8080))
+    app.run(host="0.0.0.0", port=port, debug=False)
