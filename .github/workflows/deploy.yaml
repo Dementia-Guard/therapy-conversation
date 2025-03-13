@@ -46,7 +46,13 @@ jobs:
 
       - name: "Create Environment Variables File"
         run: |
-          echo "FIREBASE_SERVICE_ACCOUNT_KEY=${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}" > env.yaml
+          cat <<EOF > env.yaml
+          FIREBASE_SERVICE_ACCOUNT_KEY: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}'
+          EOF
+
+      - name: 'Debug Environment Variables File'
+        run: |
+          cat env.yaml
 
       - name: Deploy to Cloud Run
         run: |
