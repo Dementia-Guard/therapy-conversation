@@ -63,8 +63,8 @@ jobs:
             --region ${{ env.GCR_REGION }} \
             --port 8000 \
             --allow-unauthenticated \
-            --memory 2Gi \
-            --cpu 2 \
+            --memory 4Gi \
+            --cpu 4 \
             --timeout=1800s \
             --env-vars-file env.yaml
 
