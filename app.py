@@ -9,23 +9,13 @@ import torch
 from sentence_transformers import SentenceTransformer, util
 import numpy as np
 import os
-from memory_profiler import profile
 
 # Load SentenceTransformer model for evaluating answers
-@profile
-def load_embedding_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
-
-embedding_model = load_embedding_model()
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Load DialoGPT model and tokenizer for chat conversations
-@profile
-def load_chatbot_model():
-    tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
-    model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-medium")
-    return tokenizer, model
-
-chatbot_tokenizer, chatbot_model = load_chatbot_model()
+chatbot_tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
+chatbot_model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-medium")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -54,7 +44,6 @@ def update_session(user_id, session_data):
     db.collection('sessions').document(user_id).set(session_data)
 
 # This function tracks and handles the conversation flow
-@profile
 def handle_conversation(user_id, user_message):
     # Get active session data for the user
     session_data = get_session(user_id)
@@ -83,7 +72,6 @@ def handle_conversation(user_id, user_message):
         return chatbot_response    
 
 # Function to evaluate the main question answer
-@profile
 def evaluate_main_question(user_answer, correct_answer, threshold=0.8):
     user_embedding = embedding_model.encode(user_answer, convert_to_tensor=True)
     correct_embedding = embedding_model.encode(correct_answer, convert_to_tensor=True)
@@ -91,7 +79,6 @@ def evaluate_main_question(user_answer, correct_answer, threshold=0.8):
     return similarity >= threshold, similarity  # Return boolean for correctness and similarity score
 
 # Function to evaluate sub-question answers
-@profile
 def evaluate_sub_question(user_answer, sub_question, threshold=0.5):
     answer_embedding = embedding_model.encode(user_answer, convert_to_tensor=True)
     question_embedding = embedding_model.encode(sub_question, convert_to_tensor=True)
@@ -110,13 +97,8 @@ def save_answer_to_db(user_id, question, answer, accuracy, question_type):
         'timestamp': datetime.now().isoformat()
     })
 
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({"message": "Welcome to the Chatbot API!"})
-
 # Route to handle quiz submissions and evaluate answers
 @app.route('/post_quiz/<user_id>', methods=['POST'])
-@profile
 def post_quiz(user_id):
     # Get the user answers from the request
     data = request.get_json()
@@ -170,7 +152,6 @@ def store_conversation(user_id, user_message, chatbot_response):
     })
 
 # Function to get chatbot's response using DialoGPT
-@profile
 def get_chatbot_response(user_message):
     # Encode the user message
     new_user_input_ids = chatbot_tokenizer.encode(user_message + chatbot_tokenizer.eos_token, return_tensors='pt')
@@ -195,14 +176,12 @@ def get_chatbot_response(user_message):
 
 # Route to start the chat session
 @app.route("/start_session/<string:user_id>", methods=["GET"])
-@profile
 def start_session(user_id):
     get_session(user_id)
     return jsonify({"message": "Hello, how are you today? Let's start chatting!"}), 200
 
 # Route to handle the user's messages during the chat session
 @app.route("/send_message/<string:user_id>", methods=["POST"])
-@profile
 def send_message(user_id):
     user_message = request.json.get("message")  # Get the user message from the request
     
@@ -214,7 +193,6 @@ def send_message(user_id):
 
 # Route to get quiz questions for the user
 @app.route("/get_quiz/<string:user_id>", methods=["GET"])
-@profile
 def get_quiz(user_id):
     quiz_data = get_quiz_questions(user_id)
 
@@ -243,7 +221,6 @@ def get_quiz(user_id):
 
 # Route to save user data to the database
 @app.route("/save_user/<string:user_id>", methods=["POST"])
-@profile
 def save_user(user_id):
     """Save user data to the database."""
     try:
