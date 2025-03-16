@@ -97,6 +97,10 @@ def save_answer_to_db(user_id, question, answer, accuracy, question_type):
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"message": "Welcome to the Therapy Assistant Service!"})
+
 # Route to handle quiz submissions and evaluate answers
 @app.route('/post_quiz/<user_id>', methods=['POST'])
 def post_quiz(user_id):
