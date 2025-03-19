@@ -7,7 +7,7 @@ serviceAccountKey.json
 
 # Ignore IDE-specific files
 .idea/
-.venv/
+venv/
 
 # Ignore logs and temporary files
 *.log
