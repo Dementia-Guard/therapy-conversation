@@ -8,7 +8,14 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install the required Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+&& pip uninstall -y opencv-python || true
+
+# Reinstall to ensure headless only
+RUN pip install --no-cache-dir opencv-python-headless==4.10.0.84
+
+# Verify only headless is present
+RUN pip list | grep opencv | grep headless || { echo "Error: opencv-python still present"; exit 1; }
 
 # Copy the current directory contents into the container
 COPY . .
