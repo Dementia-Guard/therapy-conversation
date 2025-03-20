@@ -1,5 +1,5 @@
 # Description: Dockerfile for the Flask app
-FROM python:3.12
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /app
