@@ -1,4 +1,4 @@
-from flask import session as flask_session, Blueprint, jsonify, request, current_app
+from flask import session as flask_session, Blueprint, jsonify, request, current_app, Response
 import random
 from user_services.models import User, ChatSession, ChatRecord, QuizScore
 from quiz_services.routes import get_preferences_quiz, get_life_events_quiz, get_images_quiz
@@ -141,7 +141,9 @@ def handle_quiz_answer(session_id):
     # If the user initiates the quiz
     if user_answer.lower() == "start quiz":
         if session.get('quiz_count', 0) == 0:
-            quiz = get_preferences_quiz(session['user_id'])
+            quiz_response = get_preferences_quiz(session['user_id'])
+            quiz = quiz_response.get_json() if isinstance(quiz_response, Response) else quiz_response
+            
             flask_session['current_quiz_question'] = quiz['question']
             flask_session['current_quiz_answer'] = quiz.get('answer', None)
             flask_session['current_quiz_base64'] = quiz.get('image_base64', None)
@@ -202,11 +204,13 @@ def handle_quiz_answer(session_id):
 
         while True:
             if quiz_count == 1:
-                next_quiz = get_preferences_quiz(session['user_id'])
+                next_quiz_response = get_preferences_quiz(session['user_id'])
             elif quiz_count in [2, 3]:
-                next_quiz = get_life_events_quiz(session['user_id'])
+                next_quiz_response= get_life_events_quiz(session['user_id'])
             elif quiz_count in [4, 5]:
-                next_quiz = get_images_quiz(session['user_id'])
+                next_quiz_response = get_images_quiz(session['user_id'])
+
+            next_quiz = next_quiz_response.get_json() if isinstance(next_quiz_response, Response) else next_quiz_response
 
             if not next_quiz or 'question' not in next_quiz:
                 return jsonify({'message': 'No more quizzes available.'}), 400  
